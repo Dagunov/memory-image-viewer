@@ -1,5 +1,17 @@
 # memory-image-viewer
 
+Memory Image Viewer gives ability to read, display and save images directly
+from process memory.\
+Memory Image Viewer can be used in CLI or GUI modes (GUI mode can be started
+from CLI if no arguments are provided).\
+This tool is tested on Windows and Mac, and should work on Linux.
+
+## GUI mode
+
+Currently GUI mode is able only to save image as "out.png", and it will crush
+if _anything_ goes wrong.\
+![miv GUI](/assets/interface.png)
+
 ## CLI mode
 
 ```
@@ -7,7 +19,7 @@
 
 Tool which allows to save image from cv::Mat from memory
 
-Usage: miv.exe [OPTIONS] <PID> <ADDR> <WIDTH> <HEIGHT> <BUF_TYPE>
+Usage: miv [OPTIONS] <PID> <ADDR> <WIDTH> <HEIGHT> <BUF_TYPE>
 
 Arguments:
   <PID>       PID of target process
