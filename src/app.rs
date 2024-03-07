@@ -85,5 +85,5 @@ impl Application {
 /// is empty), this function returns true.
 fn check_process_filter(pid: &str, pname: &str, filter: &str) -> bool {
     filter.is_empty()
-        || (pid.contains(&filter) || pname.to_lowercase().contains(&filter.to_lowercase()))
+        || (pid.contains(filter) || pname.to_lowercase().contains(&filter.to_lowercase()))
 }

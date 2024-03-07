@@ -109,38 +109,35 @@ impl DataType {
             DataType::CV_32FC1 | DataType::CV_32FC2 | DataType::CV_32FC3 | DataType::CV_32FC4 => {
                 bytes
                     .chunks(4)
-                    .map(|c| {
+                    .flat_map(|c| {
                         assert!(c.len() == 4);
                         let f = f32::from_ne_bytes(c.try_into().unwrap());
                         let u = (f * u8::MAX as f32) as u8;
                         u.to_ne_bytes()
                     })
-                    .flatten()
                     .collect()
             }
             DataType::CV_64FC1 | DataType::CV_64FC2 | DataType::CV_64FC3 | DataType::CV_64FC4 => {
                 bytes
                     .chunks(8)
-                    .map(|c| {
+                    .flat_map(|c| {
                         assert!(c.len() == 8);
                         let f = f64::from_ne_bytes(c.try_into().unwrap());
                         let u = (f * u8::MAX as f64) as u8;
                         u.to_ne_bytes()
                     })
-                    .flatten()
                     .collect()
             }
             DataType::CV_16UC1 | DataType::CV_16UC2 | DataType::CV_16UC3 | DataType::CV_16UC4 => {
                 bytes
                     .chunks(2)
-                    .map(|c| {
+                    .flat_map(|c| {
                         assert!(c.len() == 2);
                         let u = u16::from_ne_bytes(c.try_into().unwrap());
                         let k = u16::MAX as f32 / u as f32;
                         let u = (k * u8::MAX as f32) as u8;
                         u.to_ne_bytes()
                     })
-                    .flatten()
                     .collect()
             }
             // supported ones
@@ -154,7 +151,7 @@ impl DataType {
         let bytes = self.convert_to_supported(bytes);
         ImageData {
             data: bytes,
-            color_type: self.clone().into(),
+            color_type: (*self).into(),
             width,
             height,
         }
