@@ -152,7 +152,6 @@ impl DataType {
     /// conversions.
     pub fn init_image_data(&self, bytes: Vec<u8>, width: u32, height: u32) -> ImageData {
         let bytes = self.convert_to_supported(bytes);
-        let ctype: ColorType = self.clone().into();
         ImageData {
             data: bytes,
             color_type: self.clone().into(),

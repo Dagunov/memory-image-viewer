@@ -69,7 +69,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         Self {
             config: Config::new(),
             sysinfo: SysInfo::new(),
