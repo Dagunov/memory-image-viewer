@@ -1,4 +1,6 @@
 use clap::{builder::PossibleValue, ValueEnum};
+use eframe::egui::ColorImage;
+use image::ColorType;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(non_camel_case_types)]
@@ -26,19 +28,19 @@ impl ValueEnum for DataType {
     fn value_variants<'a>() -> &'a [Self] {
         &[
             Self::CV_8UC1,
-            Self::CV_8UC2,
+            // Self::CV_8UC2,
             Self::CV_8UC3,
             Self::CV_8UC4,
             Self::CV_16UC1,
-            Self::CV_16UC2,
+            // Self::CV_16UC2,
             Self::CV_16UC3,
             Self::CV_16UC4,
             Self::CV_32FC1,
-            Self::CV_32FC2,
+            // Self::CV_32FC2,
             Self::CV_32FC3,
             Self::CV_32FC4,
             Self::CV_64FC1,
-            Self::CV_64FC2,
+            // Self::CV_64FC2,
             Self::CV_64FC3,
             Self::CV_64FC4,
         ]
@@ -66,26 +68,14 @@ impl ValueEnum for DataType {
     }
 }
 
-impl From<DataType> for image::ColorType {
+impl From<DataType> for ColorType {
     fn from(value: DataType) -> Self {
-        match value {
-            DataType::CV_8UC1 => image::ColorType::L8,
-            DataType::CV_8UC2 => image::ColorType::La8,
-            DataType::CV_8UC3 => image::ColorType::Rgb8,
-            DataType::CV_8UC4 => image::ColorType::Rgba8,
-            DataType::CV_16UC1 => image::ColorType::L16,
-            DataType::CV_16UC2 => image::ColorType::La16,
-            DataType::CV_16UC3 => image::ColorType::Rgb16,
-            DataType::CV_16UC4 => image::ColorType::Rgba16,
-            // next types require conversion
-            DataType::CV_32FC1 => image::ColorType::L16,
-            DataType::CV_32FC2 => image::ColorType::La16,
-            DataType::CV_32FC3 => image::ColorType::Rgb16,
-            DataType::CV_32FC4 => image::ColorType::Rgba16,
-            DataType::CV_64FC1 => image::ColorType::L16,
-            DataType::CV_64FC2 => image::ColorType::La16,
-            DataType::CV_64FC3 => image::ColorType::Rgb16,
-            DataType::CV_64FC4 => image::ColorType::Rgba16,
+        match value.channels() {
+            1 => ColorType::L8,
+            2 => ColorType::La8,
+            3 => ColorType::Rgb8,
+            4 => ColorType::Rgba8,
+            _ => unreachable!(),
         }
     }
 }
@@ -113,9 +103,8 @@ impl DataType {
         self.channels() * self.bytes_per_color()
     }
 
-    /// Convert float image types like `CV_64FC2`
-    /// to u16 ones, like `La16`.
-    pub fn convert_to_supported(&self, bytes: Vec<u8>) -> Vec<u8> {
+    /// Convert all images to u8 ones to be able to display them
+    fn convert_to_supported(&self, bytes: Vec<u8>) -> Vec<u8> {
         match self {
             DataType::CV_32FC1 | DataType::CV_32FC2 | DataType::CV_32FC3 | DataType::CV_32FC4 => {
                 bytes
@@ -123,7 +112,7 @@ impl DataType {
                     .map(|c| {
                         assert!(c.len() == 4);
                         let f = f32::from_ne_bytes(c.try_into().unwrap());
-                        let u = (f * u16::MAX as f32) as u16;
+                        let u = (f * u8::MAX as f32) as u8;
                         u.to_ne_bytes()
                     })
                     .flatten()
@@ -135,30 +124,72 @@ impl DataType {
                     .map(|c| {
                         assert!(c.len() == 8);
                         let f = f64::from_ne_bytes(c.try_into().unwrap());
-                        let u = (f * u16::MAX as f64) as u16;
+                        let u = (f * u8::MAX as f64) as u8;
+                        u.to_ne_bytes()
+                    })
+                    .flatten()
+                    .collect()
+            }
+            DataType::CV_16UC1 | DataType::CV_16UC2 | DataType::CV_16UC3 | DataType::CV_16UC4 => {
+                bytes
+                    .chunks(2)
+                    .map(|c| {
+                        assert!(c.len() == 2);
+                        let u = u16::from_ne_bytes(c.try_into().unwrap());
+                        let k = u16::MAX as f32 / u as f32;
+                        let u = (k * u8::MAX as f32) as u8;
                         u.to_ne_bytes()
                     })
                     .flatten()
                     .collect()
             }
             // supported ones
-            DataType::CV_8UC1
-            | DataType::CV_8UC2
-            | DataType::CV_8UC3
-            | DataType::CV_8UC4
-            | DataType::CV_16UC1
-            | DataType::CV_16UC2
-            | DataType::CV_16UC3
-            | DataType::CV_16UC4 => bytes,
+            DataType::CV_8UC1 | DataType::CV_8UC2 | DataType::CV_8UC3 | DataType::CV_8UC4 => bytes,
+        }
+    }
+
+    /// Creates `ImageData` based on `DataType` with all required
+    /// conversions.
+    pub fn init_image_data(&self, bytes: Vec<u8>, width: u32, height: u32) -> ImageData {
+        let bytes = self.convert_to_supported(bytes);
+        let ctype: ColorType = self.clone().into();
+        ImageData {
+            data: bytes,
+            color_type: self.clone().into(),
+            width,
+            height,
         }
     }
 }
 
-pub fn save_bytes(
-    bytes: Vec<u8>,
-    color_type: impl Into<image::ColorType>,
-    filename: &str,
-    dims: [u32; 2],
-) -> image::ImageResult<()> {
-    image::save_buffer(filename, &bytes, dims[0], dims[1], color_type.into())
+pub struct ImageData {
+    pub data: Vec<u8>,
+    pub color_type: ColorType,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl ImageData {
+    /// initializes appropriate egui image
+    pub fn init_egui_image(&self) -> ColorImage {
+        match self.color_type.channel_count() {
+            1 => ColorImage::from_gray([self.width as usize, self.height as usize], &self.data),
+            3 => ColorImage::from_rgb([self.width as usize, self.height as usize], &self.data),
+            4 => ColorImage::from_rgba_unmultiplied(
+                [self.width as usize, self.height as usize],
+                &self.data,
+            ),
+            _ => unimplemented!(),
+        }
+    }
+}
+
+pub fn save_bytes(image: &ImageData, filename: &str) -> image::ImageResult<()> {
+    image::save_buffer(
+        filename,
+        &image.data,
+        image.width,
+        image.height,
+        image.color_type,
+    )
 }

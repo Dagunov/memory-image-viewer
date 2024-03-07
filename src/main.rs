@@ -1,5 +1,5 @@
 use clap::Parser;
-use log::{error, trace, warn};
+use log::{error, info, warn};
 use read_process_memory::{copy_address, Pid, ProcessHandle};
 
 mod app;
@@ -33,11 +33,11 @@ struct CLI {
 fn main() {
     env_logger::init();
     if std::env::args().len() > 1 {
-        trace!("Working in CLI mode");
+        info!("Working in CLI mode");
         let cli = CLI::parse();
         process_cli(cli);
     } else {
-        trace!("Working in GUI mode");
+        info!("Working in GUI mode");
         let native_options = eframe::NativeOptions::default();
         if let Err(e) = eframe::run_native(
             "MyApp",
@@ -55,12 +55,8 @@ fn process_cli(cli: CLI) {
     let addr = parse_address(&cli.addr).unwrap();
     let bytes = get_bytes(cli.pid, addr, buff_size);
     if !bytes.is_empty() {
-        match imageprocessing::save_bytes(
-            cli.buf_type.convert_to_supported(bytes),
-            cli.buf_type,
-            &(cli.out + ".png"),
-            [cli.width, cli.height],
-        ) {
+        let image_data = cli.buf_type.init_image_data(bytes, cli.width, cli.height);
+        match imageprocessing::save_bytes(&image_data, &(cli.out + ".png")) {
             Ok(_) => println!("Image saved!"),
             Err(e) => println!("Could not save an image: {:?}", e),
         }
