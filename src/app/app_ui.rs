@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use clap::ValueEnum;
 use eframe::{
     egui::{
@@ -6,20 +8,64 @@ use eframe::{
     },
     App,
 };
-use log::{error, info};
+use egui_notify::Toasts;
+use log::{error, info, warn};
 
-use crate::{
-    get_bytes,
-    imageprocessing::{save_bytes, DataType},
-    parse_address,
-};
+use crate::{get_bytes, imageprocessing::DataType, parse_address};
 
-use super::{check_process_filter, Application};
+use super::{check_process_filter, image_view::ImageView, Application, Toaster};
 
-impl Application {}
+#[derive(Debug)]
+enum GetImageError {
+    AddressNotValid,
+    MemoryReadError(std::io::Error),
+}
+
+impl Toaster {
+    pub fn new() -> Self {
+        Self {
+            toasts: Rc::new(RefCell::new(Toasts::default())),
+        }
+    }
+
+    fn draw(&self, ctx: &Context) {
+        self.toasts.borrow_mut().show(ctx);
+    }
+
+    /// creates toasts info notification as well as prints to log
+    pub fn info(&mut self, s: impl Into<String>, secs: u64) {
+        let s = s.into();
+        info!("{}", s);
+        self.toasts
+            .borrow_mut()
+            .info(s)
+            .set_duration(Some(std::time::Duration::from_secs(secs)));
+    }
+
+    /// creates toasts warn notification as well as prints to log
+    pub fn warn(&mut self, s: impl Into<String>, secs: u64) {
+        let s = s.into();
+        warn!("{}", s);
+        self.toasts
+            .borrow_mut()
+            .warning(s)
+            .set_duration(Some(std::time::Duration::from_secs(secs)));
+    }
+
+    /// creates toasts error notification as well as prints to log
+    pub fn error(&mut self, s: impl Into<String>) {
+        let s = s.into();
+        error!("{}", s);
+        self.toasts
+            .borrow_mut()
+            .error(s)
+            .set_duration(None)
+            .set_closable(true);
+    }
+}
 
 impl App for Application {
-    fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.vertical(|ui| self.draw_config(ui));
@@ -30,27 +76,11 @@ impl App for Application {
             });
         });
 
-        self.toasts.show(ctx);
+        self.toaster.draw(ctx);
     }
 }
 
 impl Application {
-    /// creates toasts info notification as well as prints to log
-    fn info(&mut self, s: impl Into<String>, secs: u64) {
-        let s = s.into();
-        info!("{}", s);
-        self.toasts
-            .info(s)
-            .set_duration(Some(std::time::Duration::from_secs(secs)));
-    }
-
-    /// creates toasts error notification as well as prints to log
-    fn error(&mut self, s: impl Into<String>) {
-        let s = s.into();
-        error!("{}", s);
-        self.toasts.error(s).set_duration(None).set_closable(true);
-    }
-
     fn draw_config(&mut self, ui: &mut eframe::egui::Ui) {
         ui.set_width(200f32);
         // Process selection
@@ -80,7 +110,13 @@ impl Application {
         }
 
         // Memory address input
-        ui.add(TextEdit::singleline(&mut self.config.address).hint_text("Memory address"));
+        ui.vertical(|ui| {
+            if !self.config.address.is_empty() && !parse_address(&self.config.address).is_ok() {
+                ui.style_mut().visuals.override_text_color =
+                    Some(ui.style().visuals.error_fg_color);
+            }
+            ui.add(TextEdit::singleline(&mut self.config.address).hint_text("Memory address"));
+        });
 
         // Image size input
         Grid::new("Sizes").show(ui, |ui| {
@@ -124,7 +160,6 @@ impl Application {
                 let mut button = Button::new(process.name())
                     .wrap(false)
                     .shortcut_text(&pid_string);
-                // .min_size(vec2(ui.available_width(), 0f32));
                 if pid.as_u32() == self.config.pid {
                     button = button.selected(true);
                 }
@@ -146,47 +181,65 @@ impl Application {
     }
 
     fn draw_image_block(&mut self, ui: &mut Ui) {
-        if ui.button("Get image").clicked() {
-            let length = self.config.width as usize
-                * self.config.height as usize
-                * self.config.data_type.bytes_per_pixel() as usize;
-            if let Ok(address) = parse_address(&self.config.address) {
-                let bytes = get_bytes(self.config.pid, address, length);
-                if !bytes.is_empty() {
-                    self.info("Image loaded!", 2);
-                    self.image = Some(self.config.data_type.init_image_data(
+        if self.config.is_filled() {
+            if self.last_config.is_none()
+                || self.last_config.as_ref().is_some_and(|c| &self.config != c)
+            {
+                match self.get_image(ui) {
+                    Ok(_) => info!("Image loaded!"), // may spam, user will see if all ok
+                    Err(e) => {
+                        self.toaster.warn(format!("Image not loaded: {:?}", e), 2);
+                    }
+                }
+                self.last_config = Some(self.config.clone());
+            }
+        }
+
+        if let Some(image_view) = self.image_view.as_mut() {
+            image_view.draw(ui);
+        }
+
+        // if self.saving_thread.is_some() {
+        //     ui.spinner();
+        // }
+        // if ui
+        //     .add_enabled(
+        //         self.image.is_some() && self.saving_thread.is_none(),
+        //         Button::new("Save"),
+        //     )
+        //     .clicked()
+        // {
+        //     let image_copy = self.image.as_ref().unwrap().clone();
+        //     self.saving_thread = Some(std::thread::spawn(move || {
+        //         image_copy.save(&PathBuf::from("out/out.png"))
+        //     }));
+        // }
+
+        // if let Some(texture) = &self.texture {
+        //     ui.add(Image::from_texture(texture).max_size(vec2(200f32, 200f32)));
+        // }
+    }
+
+    fn get_image(&mut self, ui: &mut Ui) -> Result<(), GetImageError> {
+        let length = self.config.width as usize
+            * self.config.height as usize
+            * self.config.data_type.bytes_per_pixel() as usize;
+        if let Ok(address) = parse_address(&self.config.address) {
+            match get_bytes(self.config.pid, address, length) {
+                Ok(bytes) => {
+                    let image_data = self.config.data_type.init_image_data(
                         bytes,
                         self.config.width,
                         self.config.height,
-                    ));
-                    self.texture = None;
-                } else {
-                    self.toasts
-                        .warning("Image was not loaded!")
-                        .set_duration(Some(std::time::Duration::from_secs(2)));
+                    );
+                    self.image_view =
+                        Some(ImageView::new(image_data, self.toaster.clone(), ui.ctx()));
+                    Ok(())
                 }
+                Err(e) => Err(GetImageError::MemoryReadError(e)),
             }
-        }
-
-        if ui
-            .add_enabled(self.image.is_some(), Button::new("Save"))
-            .clicked()
-        {
-            match save_bytes(self.image.as_ref().unwrap(), "out.png") {
-                Ok(_) => self.info("Image saved!", 3),
-                Err(e) => self.error(format!("Image not saved: {}", e)),
-            }
-        }
-
-        if let Some(image_data) = &self.image {
-            let texture = self.texture.get_or_insert_with(|| {
-                ui.ctx().load_texture(
-                    "image",
-                    image_data.init_egui_image(),
-                    TextureOptions::NEAREST,
-                )
-            });
-            ui.image(&*texture);
+        } else {
+            Err(GetImageError::AddressNotValid)
         }
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "memory-image-viewer"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [[bin]]
@@ -16,5 +16,6 @@ egui-notify = "0.13.0"
 env_logger = "0.11.2"
 image = { version = "0.24.9", default-features = false, features = ["png"] }
 log = "0.4.21"
+native-dialog = "0.7.0"
 read-process-memory = "0.1.6"
 sysinfo = "0.30.6"

@@ -8,11 +8,16 @@ This tool is tested on Windows and Mac, and should work on Linux.
 
 ## GUI mode
 
-Currently GUI mode is able only to save image as "out.png", and it will crush
-if _anything_ goes wrong.\
+GUI is prefered mode for using memory-image-viewer.\
+At the moment, the only required feature missing is color conversions - as BGR is oftenly used in opencv.\
+On Linux, additional requirements (Zenity or Kdialog) may be installed to fully use "Save" feature, but images can still be exported, and as soon as "Dump" features will be implemented, "Save" is not required at all (and may be disabled on requirements unsatisfaction).\
+UI may look slightly different, but main elements are present below.
 ![miv GUI](/assets/interface.png)
 
 ## CLI mode
+
+While CLI mode is fully implemented, GUI mode is much, much more feature-rich.\
+CLI mode will be supported but it is not planned to update it.
 
 ```
 > miv --help

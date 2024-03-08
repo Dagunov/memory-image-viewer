@@ -1,8 +1,10 @@
+use std::path::Path;
+
 use clap::{builder::PossibleValue, ValueEnum};
 use eframe::egui::ColorImage;
 use image::ColorType;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 #[non_exhaustive]
 pub enum DataType {
@@ -158,12 +160,21 @@ impl DataType {
     }
 }
 
+#[derive(Clone)]
 pub struct ImageData {
     pub data: Vec<u8>,
     pub color_type: ColorType,
     pub width: u32,
     pub height: u32,
 }
+
+#[derive(Debug)]
+pub enum ImageProcessingError {
+    IoError(std::io::Error),
+    ImageError(image::ImageError),
+}
+
+pub type ImageProcessingResult = Result<(), ImageProcessingError>;
 
 impl ImageData {
     /// initializes appropriate egui image
@@ -178,14 +189,19 @@ impl ImageData {
             _ => unimplemented!(),
         }
     }
-}
 
-pub fn save_bytes(image: &ImageData, filename: &str) -> image::ImageResult<()> {
-    image::save_buffer(
-        filename,
-        &image.data,
-        image.width,
-        image.height,
-        image.color_type,
-    )
+    /// saves image on disk
+    pub fn save(&self, filename: &Path) -> ImageProcessingResult {
+        if let Some(filedir) = filename.parent() {
+            std::fs::create_dir_all(filedir).map_err(|e| ImageProcessingError::IoError(e))?;
+        }
+        image::save_buffer(
+            filename,
+            &self.data,
+            self.width,
+            self.height,
+            self.color_type,
+        )
+        .map_err(|e| ImageProcessingError::ImageError(e))
+    }
 }

@@ -1,5 +1,5 @@
 use clap::Parser;
-use log::{error, info, warn};
+use log::{error, info};
 use read_process_memory::{copy_address, Pid, ProcessHandle};
 
 mod app;
@@ -53,13 +53,15 @@ fn process_cli(cli: CLI) {
     let buff_size =
         cli.width as usize * cli.height as usize * cli.buf_type.bytes_per_pixel() as usize;
     let addr = parse_address(&cli.addr).unwrap();
-    let bytes = get_bytes(cli.pid, addr, buff_size);
-    if !bytes.is_empty() {
-        let image_data = cli.buf_type.init_image_data(bytes, cli.width, cli.height);
-        match imageprocessing::save_bytes(&image_data, &(cli.out + ".png")) {
-            Ok(_) => println!("Image saved!"),
-            Err(e) => println!("Could not save an image: {:?}", e),
+    match get_bytes(cli.pid, addr, buff_size) {
+        Ok(bytes) => {
+            let image_data = cli.buf_type.init_image_data(bytes, cli.width, cli.height);
+            match &image_data.save(&std::path::PathBuf::from(&(cli.out + ".png"))) {
+                Ok(_) => info!("Image saved!"),
+                Err(e) => error!("Could not save an image: {:?}", e),
+            }
         }
+        Err(e) => error!("Bytes could not de loaded: {:?}", e),
     }
 }
 
@@ -67,13 +69,7 @@ fn parse_address(address: &str) -> Result<usize, ()> {
     usize::from_str_radix(address.trim_start_matches("0x"), 16).map_err(|_| ())
 }
 
-fn get_bytes(pid: u32, address: usize, length: usize) -> Vec<u8> {
-    let handle = ProcessHandle::try_from(pid as Pid).unwrap();
-    match copy_address(address, length, &handle) {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            warn!("Memory could not be read: {:?}", e);
-            vec![]
-        }
-    }
+fn get_bytes(pid: u32, address: usize, length: usize) -> std::io::Result<Vec<u8>> {
+    let handle = ProcessHandle::try_from(pid as Pid)?;
+    copy_address(address, length, &handle)
 }

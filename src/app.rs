@@ -1,13 +1,15 @@
-use std::time::Instant;
+use std::{cell::RefCell, rc::Rc, time::Instant};
 
 use egui_notify::Toasts;
 
-use crate::imageprocessing::{self, ImageData};
+use crate::{imageprocessing, parse_address};
 
 mod app_ui;
+mod image_view;
 
 /// Configuration sets how to read an image
 /// and where from.
+#[derive(Clone, PartialEq, Eq)]
 struct Config {
     pid_label: String,
     pid: u32,
@@ -27,6 +29,11 @@ impl Config {
             height: 0,
             data_type: imageprocessing::DataType::CV_8UC3,
         }
+    }
+
+    /// Checks if config is filled and all data is valid
+    pub fn is_filled(&self) -> bool {
+        self.pid != 0 && parse_address(&self.address).is_ok() && self.width != 0 && self.height != 0
     }
 }
 
@@ -60,22 +67,27 @@ impl SysInfo {
     }
 }
 
+#[derive(Clone)]
+pub struct Toaster {
+    toasts: Rc<RefCell<Toasts>>,
+}
+
 pub struct Application {
     config: Config,
+    last_config: Option<Config>,
     sysinfo: SysInfo,
-    image: Option<ImageData>,
-    texture: Option<eframe::egui::TextureHandle>,
-    toasts: Toasts,
+    toaster: Toaster,
+    image_view: Option<image_view::ImageView>,
 }
 
 impl Application {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         Self {
             config: Config::new(),
+            last_config: None,
             sysinfo: SysInfo::new(),
-            image: None,
-            texture: None,
-            toasts: Toasts::default(),
+            toaster: Toaster::new(),
+            image_view: None,
         }
     }
 }
