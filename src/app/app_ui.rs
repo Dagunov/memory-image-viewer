@@ -111,7 +111,7 @@ impl Application {
 
         // Memory address input
         ui.vertical(|ui| {
-            if !self.config.address.is_empty() && !parse_address(&self.config.address).is_ok() {
+            if !self.config.address.is_empty() && parse_address(&self.config.address).is_err() {
                 ui.style_mut().visuals.override_text_color =
                     Some(ui.style().visuals.error_fg_color);
             }
@@ -181,18 +181,17 @@ impl Application {
     }
 
     fn draw_image_block(&mut self, ui: &mut Ui) {
-        if self.config.is_filled() {
-            if self.last_config.is_none()
-                || self.last_config.as_ref().is_some_and(|c| &self.config != c)
-            {
-                match self.get_image(ui) {
-                    Ok(_) => info!("Image loaded!"), // may spam, user will see if all ok
-                    Err(e) => {
-                        self.toaster.warn(format!("Image not loaded: {:?}", e), 2);
-                    }
+        if self.config.is_filled()
+            && (self.last_config.is_none()
+                || self.last_config.as_ref().is_some_and(|c| &self.config != c))
+        {
+            match self.get_image(ui) {
+                Ok(_) => info!("Image loaded!"), // may spam, user will see if all ok
+                Err(e) => {
+                    self.toaster.warn(format!("Image not loaded: {:?}", e), 2);
                 }
-                self.last_config = Some(self.config.clone());
             }
+            self.last_config = Some(self.config.clone());
         }
 
         if let Some(image_view) = self.image_view.as_mut() {

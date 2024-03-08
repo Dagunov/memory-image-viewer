@@ -193,7 +193,7 @@ impl ImageData {
     /// saves image on disk
     pub fn save(&self, filename: &Path) -> ImageProcessingResult {
         if let Some(filedir) = filename.parent() {
-            std::fs::create_dir_all(filedir).map_err(|e| ImageProcessingError::IoError(e))?;
+            std::fs::create_dir_all(filedir).map_err(ImageProcessingError::IoError)?;
         }
         image::save_buffer(
             filename,
@@ -202,6 +202,6 @@ impl ImageData {
             self.height,
             self.color_type,
         )
-        .map_err(|e| ImageProcessingError::ImageError(e))
+        .map_err(ImageProcessingError::ImageError)
     }
 }
