@@ -1,5 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
-
 use clap::ValueEnum;
 use eframe::{
     egui::{
@@ -8,7 +6,6 @@ use eframe::{
     },
     App,
 };
-use egui_notify::Toasts;
 use log::{error, info, warn};
 
 use crate::{get_bytes, imageprocessing::DataType, parse_address};
@@ -22,12 +19,6 @@ enum GetImageError {
 }
 
 impl Toaster {
-    pub fn new() -> Self {
-        Self {
-            toasts: Rc::new(RefCell::new(Toasts::default())),
-        }
-    }
-
     fn draw(&self, ctx: &Context) {
         self.toasts.borrow_mut().show(ctx);
     }
@@ -77,6 +68,10 @@ impl App for Application {
         });
 
         self.toaster.draw(ctx);
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, eframe::APP_KEY, self);
     }
 }
 

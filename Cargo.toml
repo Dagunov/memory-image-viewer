@@ -11,11 +11,12 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.5.1", features = ["derive"] }
-eframe = "0.26.2"
+eframe = { version = "0.26.2", features = ["persistence"] }
 egui-notify = "0.13.0"
 env_logger = "0.11.2"
 image = { version = "0.24.9", default-features = false, features = ["png"] }
 log = "0.4.21"
 native-dialog = "0.7.0"
 read-process-memory = "0.1.6"
+serde = { version = "1.0.197", features = ["derive"] }
 sysinfo = "0.30.6"

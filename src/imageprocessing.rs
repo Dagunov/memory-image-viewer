@@ -3,13 +3,15 @@ use std::path::Path;
 use clap::{builder::PossibleValue, ValueEnum};
 use eframe::egui::ColorImage;
 use image::ColorType;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[allow(non_camel_case_types)]
 #[non_exhaustive]
 pub enum DataType {
     CV_8UC1,
     CV_8UC2,
+    #[default]
     CV_8UC3,
     CV_8UC4,
     CV_16UC1,

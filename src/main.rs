@@ -40,7 +40,7 @@ fn main() {
         info!("Working in GUI mode");
         let native_options = eframe::NativeOptions::default();
         if let Err(e) = eframe::run_native(
-            "MyApp",
+            "memory-image-viewer",
             native_options,
             Box::new(|cc| Box::new(app::Application::new(cc))),
         ) {
