@@ -95,6 +95,7 @@ pub struct Application {
     toaster: Toaster,
     #[serde(skip)]
     image_view: Option<image_view::ImageView>,
+    dump_folder: Option<std::path::PathBuf>,
 }
 
 impl Application {

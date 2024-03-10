@@ -190,28 +190,8 @@ impl Application {
         }
 
         if let Some(image_view) = self.image_view.as_mut() {
-            image_view.draw(ui);
+            image_view.draw(ui, &mut self.dump_folder);
         }
-
-        // if self.saving_thread.is_some() {
-        //     ui.spinner();
-        // }
-        // if ui
-        //     .add_enabled(
-        //         self.image.is_some() && self.saving_thread.is_none(),
-        //         Button::new("Save"),
-        //     )
-        //     .clicked()
-        // {
-        //     let image_copy = self.image.as_ref().unwrap().clone();
-        //     self.saving_thread = Some(std::thread::spawn(move || {
-        //         image_copy.save(&PathBuf::from("out/out.png"))
-        //     }));
-        // }
-
-        // if let Some(texture) = &self.texture {
-        //     ui.add(Image::from_texture(texture).max_size(vec2(200f32, 200f32)));
-        // }
     }
 
     fn get_image(&mut self, ui: &mut Ui) -> Result<(), GetImageError> {
