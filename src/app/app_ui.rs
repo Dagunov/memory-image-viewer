@@ -6,11 +6,10 @@ use eframe::{
     },
     App,
 };
-use log::{error, info, warn};
 
-use crate::{get_bytes, imageprocessing::DataType, parse_address};
+use crate::{get_bytes, imageprocessing::*, parse_address};
 
-use super::{check_process_filter, image_view::ImageView, Application, Toaster};
+use super::{check_process_filter, file_helper::*, image_view::ImageView, Application};
 
 #[derive(Debug)]
 enum GetImageError {
@@ -18,56 +17,35 @@ enum GetImageError {
     MemoryReadError(std::io::Error),
 }
 
-impl Toaster {
-    fn draw(&self, ctx: &Context) {
-        self.toasts.borrow_mut().show(ctx);
-    }
-
-    /// creates toasts info notification as well as prints to log
-    pub fn info(&mut self, s: impl Into<String>, secs: u64) {
-        let s = s.into();
-        info!("{}", s);
-        self.toasts
-            .borrow_mut()
-            .info(s)
-            .set_duration(Some(std::time::Duration::from_secs(secs)));
-    }
-
-    /// creates toasts warn notification as well as prints to log
-    pub fn warn(&mut self, s: impl Into<String>, secs: u64) {
-        let s = s.into();
-        warn!("{}", s);
-        self.toasts
-            .borrow_mut()
-            .warning(s)
-            .set_duration(Some(std::time::Duration::from_secs(secs)));
-    }
-
-    /// creates toasts error notification as well as prints to log
-    pub fn error(&mut self, s: impl Into<String>) {
-        let s = s.into();
-        error!("{}", s);
-        self.toasts
-            .borrow_mut()
-            .error(s)
-            .set_duration(None)
-            .set_closable(true);
-    }
-}
-
 impl App for Application {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         CentralPanel::default().show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.vertical(|ui| self.draw_config(ui));
+            if self.in_settings {
+                self.draw_settings(ui);
+                if ui.input(|i| i.key_pressed(Key::Escape)) {
+                    self.in_settings = false;
+                }
+            } else {
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| self.draw_config(ui));
 
-                ui.separator();
+                    ui.separator();
 
-                ui.vertical(|ui| self.draw_image_block(ui));
-            });
+                    ui.vertical(|ui| self.draw_image_block(ui));
+                });
+            }
         });
 
-        self.toaster.draw(ctx);
+        TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                self.logger.borrow().show_label(ui);
+                ui.with_layout(Layout::right_to_left(Align::Max), |ui| {
+                    if ui.button("⛭").clicked() {
+                        self.in_settings = !self.in_settings;
+                    }
+                });
+            });
+        });
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -132,6 +110,27 @@ impl Application {
                     ui.selectable_value(&mut self.config.data_type, *val, format!("{:?}", val));
                 }
             });
+
+        // Channel order selection
+        ui.add_enabled_ui(
+            self.config.data_type.channels() == 3 || self.config.data_type.channels() == 4,
+            |ui| {
+                ui.horizontal(|ui| {
+                    if ui
+                        .selectable_label(self.config.channel_order == ChannelOrder::Rgb, "RGB")
+                        .clicked()
+                    {
+                        self.config.channel_order = ChannelOrder::Rgb;
+                    }
+                    if ui
+                        .selectable_label(self.config.channel_order == ChannelOrder::Bgr, "BGR")
+                        .clicked()
+                    {
+                        self.config.channel_order = ChannelOrder::Bgr;
+                    }
+                });
+            },
+        );
     }
 
     fn draw_processes(&mut self, ui: &mut Ui) {
@@ -181,9 +180,11 @@ impl Application {
                 || self.last_config.as_ref().is_some_and(|c| &self.config != c))
         {
             match self.get_image(ui) {
-                Ok(_) => info!("Image loaded!"), // may spam, user will see if all ok
+                Ok(_) => self.logger.borrow_mut().info("Image loaded!"),
                 Err(e) => {
-                    self.toaster.warn(format!("Image not loaded: {:?}", e), 2);
+                    self.logger
+                        .borrow_mut()
+                        .warn(format!("Image not loaded: {:?}", e));
                 }
             }
             self.last_config = Some(self.config.clone());
@@ -205,9 +206,10 @@ impl Application {
                         bytes,
                         self.config.width,
                         self.config.height,
+                        self.config.channel_order,
                     );
                     self.image_view =
-                        Some(ImageView::new(image_data, self.toaster.clone(), ui.ctx()));
+                        Some(ImageView::new(image_data, self.logger.clone(), ui.ctx()));
                     Ok(())
                 }
                 Err(e) => Err(GetImageError::MemoryReadError(e)),
@@ -215,5 +217,75 @@ impl Application {
         } else {
             Err(GetImageError::AddressNotValid)
         }
+    }
+
+    fn draw_settings(&mut self, ui: &mut Ui) {
+        ui.label("Dump folder:");
+        ui.horizontal(|ui| {
+            if self.file_dialog_not_implemented {
+                if self.dump_folder_text_edit.is_empty() && self.dump_folder.is_some() {
+                    if let Ok(string) = self
+                        .dump_folder
+                        .clone()
+                        .unwrap()
+                        .into_os_string()
+                        .into_string()
+                    {
+                        self.dump_folder_text_edit = string;
+                    }
+                }
+                ui.text_edit_singleline(&mut self.dump_folder_text_edit);
+                if ui.button("✅").clicked() || ui.input(|i| i.key_pressed(Key::Enter)) {
+                    let path = std::path::PathBuf::from(self.dump_folder_text_edit.clone());
+                    if path.exists() {
+                        self.dump_folder = Some(path);
+                    } else {
+                        if self.dump_folder.is_some() {
+                            if let Ok(string) = self
+                                .dump_folder
+                                .clone()
+                                .unwrap()
+                                .into_os_string()
+                                .into_string()
+                            {
+                                self.dump_folder_text_edit = string;
+                            }
+                        } else {
+                            self.dump_folder_text_edit.clear();
+                        }
+                    }
+                }
+            } else {
+                ui.label(
+                    self.dump_folder
+                        .as_ref()
+                        .map(|p| match p.clone().into_os_string().into_string() {
+                            Ok(string) => string,
+                            Err(e) => {
+                                self.logger
+                                    .borrow_mut()
+                                    .error(format!("Failed to convert path to string: {:?}", e));
+                                "Not set".into()
+                            }
+                        })
+                        .unwrap_or("Not set".into()),
+                );
+
+                if ui.button("✏").clicked() {
+                    match file_dialog(FileDialogMode::SelectFolder, &self.logger) {
+                        Ok(path) => self.dump_folder = Some(path),
+                        Err(FileDialogError::NoImplementation) => {
+                            self.file_dialog_not_implemented = true;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            if ui.button("❌").clicked() {
+                self.dump_folder = None;
+                self.dump_folder_text_edit.clear();
+            }
+        });
     }
 }

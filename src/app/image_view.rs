@@ -1,35 +1,30 @@
-use std::path::PathBuf;
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 use eframe::egui::*;
 
 use crate::imageprocessing::{ImageData, ImageProcessingResult};
 
-use super::Toaster;
-
-enum FileDialogMode {
-    SaveFile,
-    SelectFolder,
-}
+use super::{file_helper::*, logger::Logger};
 
 pub struct ImageView {
     image: ImageData,
     texture: TextureHandle,
     scale: f32,
-    saving_thread: Option<std::thread::JoinHandle<ImageProcessingResult>>,
-    toaster: Toaster,
+    saving_thread: Option<std::thread::JoinHandle<(ImageProcessingResult, PathBuf)>>,
+    logger: Rc<RefCell<Logger>>,
     /// for "Dump with name"
     dump_filename: Option<String>,
 }
 
 impl ImageView {
-    pub fn new(image: ImageData, toaster: Toaster, ctx: &Context) -> Self {
+    pub fn new(image: ImageData, logger: Rc<RefCell<Logger>>, ctx: &Context) -> Self {
         let texture = ctx.load_texture("image", image.init_egui_image(), TextureOptions::NEAREST);
         Self {
             image,
             texture,
             scale: 1f32,
             saving_thread: None,
-            toaster,
+            logger,
             dump_filename: None,
         }
     }
@@ -38,8 +33,18 @@ impl ImageView {
         if self.saving_thread.as_ref().is_some_and(|t| t.is_finished()) {
             let t = self.saving_thread.take().unwrap();
             match t.join() {
-                Ok(_) => self.toaster.info("Image saved!", 3),
-                Err(e) => self.toaster.error(format!("Image not saved: {:?}", e)),
+                Ok((Ok(_), fname)) => self
+                    .logger
+                    .borrow_mut()
+                    .info(format!("Image saved at {:?}", fname)),
+                Ok((Err(e), _)) => self
+                    .logger
+                    .borrow_mut()
+                    .error(format!("Image not saved: {:?}", e)),
+                Err(e) => self
+                    .logger
+                    .borrow_mut()
+                    .error(format!("Saving thread failed: {:?}", e)),
             };
         }
 
@@ -59,6 +64,7 @@ impl ImageView {
             }
             if ui.button("⊞").clicked() {
                 self.scale *= 1.1f32;
+                self.scale = self.scale.min(1f32);
             }
         });
 
@@ -74,7 +80,9 @@ impl ImageView {
             } else {
                 ui.add_enabled_ui(self.saving_thread.is_none(), |ui| {
                     if ui.button("Save").clicked() {
-                        if let Ok(new_file_path) = self.file_dialog(FileDialogMode::SaveFile) {
+                        if let Ok(new_file_path) =
+                            file_dialog(FileDialogMode::SaveFile, &self.logger)
+                        {
                             self.save_to(new_file_path);
                         }
                     }
@@ -84,7 +92,9 @@ impl ImageView {
                             if dump_folder.is_some() {
                                 self.dump_filename = Some(String::new());
                             } else {
-                                if let Ok(path) = self.file_dialog(FileDialogMode::SelectFolder) {
+                                if let Ok(path) =
+                                    file_dialog(FileDialogMode::SelectFolder, &self.logger)
+                                {
                                     dump_folder.replace(path);
                                 }
                             }
@@ -93,7 +103,9 @@ impl ImageView {
                             if dump_folder.is_some() {
                                 self.save_to(Self::gen_dump_path(dump_folder.clone().unwrap()));
                             } else {
-                                if let Ok(path) = self.file_dialog(FileDialogMode::SelectFolder) {
+                                if let Ok(path) =
+                                    file_dialog(FileDialogMode::SelectFolder, &self.logger)
+                                {
                                     dump_folder.replace(path);
                                 }
                             }
@@ -111,55 +123,20 @@ impl ImageView {
 
     fn save_to(&mut self, path: PathBuf) {
         let image_copy = self.image.clone();
-        self.saving_thread = Some(std::thread::spawn(move || image_copy.save(&path)));
-    }
-
-    fn file_dialog(&mut self, fd_mode: FileDialogMode) -> Result<PathBuf, ()> {
-        let fd = native_dialog::FileDialog::new();
-        let fd_res = match fd_mode {
-            FileDialogMode::SaveFile => fd.add_filter("png", &["png"]).show_save_single_file(),
-            FileDialogMode::SelectFolder => fd.show_open_single_dir(),
-        };
-        match fd_res {
-            Ok(path) => {
-                if let Some(path) = path {
-                    Ok(path)
-                } else {
-                    self.toaster.info("Out location not selected", 3);
-                    Err(())
-                }
-            }
-            Err(native_dialog::Error::NoImplementation) => match fd_mode {
-                FileDialogMode::SaveFile => {
-                    self.toaster
-                        .error("File dialog not supported on your OS, save file via \"Dump...\"");
-                    Err(())
-                }
-                FileDialogMode::SelectFolder => {
-                    self.toaster.error(
-                        "File dialog not supported on your OS, enter path manually in settings",
-                    );
-                    Err(())
-                }
-            },
-            Err(e) => {
-                self.toaster
-                    .error("File dialog error, enter path manually in settings or try again");
-                self.toaster.error(format!("FileDialog error: {:?}", e));
-                Err(())
-            }
-        }
+        self.saving_thread = Some(std::thread::spawn(move || {
+            (image_copy.save(&path), path.to_path_buf())
+        }));
     }
 
     fn gen_dump_path(dump_folder: PathBuf) -> PathBuf {
         let now = chrono::Local::now();
         // todo: allow custom format
-        let fname = now.format("%d_%m__%H_%M_%S.png").to_string();
+        let fname = now.format("%d%m%y_%H_%M_%S.png").to_string();
         let mut fpath = dump_folder.join(fname);
         let mut i = 1;
         while fpath.exists() {
             fpath = dump_folder.join(
-                now.format(&format!("%d_%m__%H_%M_%S({}).png", i))
+                now.format(&format!("%d%m%y_%H_%M_%S({}).png", i))
                     .to_string(),
             );
             i += 1;

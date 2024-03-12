@@ -1,4 +1,5 @@
 use clap::Parser;
+use imageprocessing::*;
 use log::{error, info};
 use read_process_memory::{copy_address, Pid, ProcessHandle};
 
@@ -23,11 +24,15 @@ struct CLI {
 
     /// Buffer type
     #[arg(value_enum)]
-    buf_type: imageprocessing::DataType,
+    buf_type: DataType,
 
     /// Out file name
     #[arg(short, long, default_value_t = String::from("out"))]
     out: String,
+
+    /// Use bgr channel order
+    #[arg(long)]
+    bgr: bool,
 }
 
 fn main() {
@@ -53,9 +58,18 @@ fn process_cli(cli: CLI) {
     let buff_size =
         cli.width as usize * cli.height as usize * cli.buf_type.bytes_per_pixel() as usize;
     let addr = parse_address(&cli.addr).unwrap();
+    let channel_order = {
+        if cli.bgr {
+            ChannelOrder::Bgr
+        } else {
+            ChannelOrder::Rgb
+        }
+    };
     match get_bytes(cli.pid, addr, buff_size) {
         Ok(bytes) => {
-            let image_data = cli.buf_type.init_image_data(bytes, cli.width, cli.height);
+            let image_data =
+                cli.buf_type
+                    .init_image_data(bytes, cli.width, cli.height, channel_order);
             match &image_data.save(&std::path::PathBuf::from(&(cli.out + ".png"))) {
                 Ok(_) => info!("Image saved!"),
                 Err(e) => error!("Could not save an image: {:?}", e),

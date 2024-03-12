@@ -1,12 +1,13 @@
 use std::{cell::RefCell, rc::Rc, time::Instant};
 
-use egui_notify::Toasts;
 use serde::{Deserialize, Serialize};
 
 use crate::{imageprocessing, parse_address};
 
 mod app_ui;
+mod file_helper;
 mod image_view;
+mod logger;
 
 /// Configuration sets how to read an image
 /// and where from.
@@ -18,6 +19,7 @@ struct Config {
     width: u32,
     height: u32,
     data_type: imageprocessing::DataType,
+    channel_order: imageprocessing::ChannelOrder,
 }
 
 impl Default for Config {
@@ -29,6 +31,7 @@ impl Default for Config {
             width: 0,
             height: 0,
             data_type: Default::default(),
+            channel_order: Default::default(),
         }
     }
 }
@@ -71,19 +74,6 @@ impl SysInfo {
     }
 }
 
-#[derive(Clone)]
-pub struct Toaster {
-    toasts: Rc<RefCell<Toasts>>,
-}
-
-impl Default for Toaster {
-    fn default() -> Self {
-        Self {
-            toasts: Rc::new(RefCell::new(Toasts::default())),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Default)]
 pub struct Application {
     config: Config,
@@ -92,10 +82,16 @@ pub struct Application {
     #[serde(skip)]
     sysinfo: SysInfo,
     #[serde(skip)]
-    toaster: Toaster,
-    #[serde(skip)]
     image_view: Option<image_view::ImageView>,
     dump_folder: Option<std::path::PathBuf>,
+    dump_folder_text_edit: String,
+    #[serde(skip)]
+    logger: Rc<RefCell<logger::Logger>>,
+    #[serde(skip)]
+    in_settings: bool,
+    // skipped from saving as user may install implementation between startups
+    #[serde(skip)]
+    file_dialog_not_implemented: bool,
 }
 
 impl Application {

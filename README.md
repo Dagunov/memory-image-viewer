@@ -9,7 +9,6 @@ This tool is tested on Windows and Mac, and should work on Linux.
 ## GUI mode
 
 GUI is prefered mode for using memory-image-viewer.\
-At the moment, the only required feature missing is color conversions - as BGR is oftenly used in opencv.\
 On Linux, additional requirements (Zenity or Kdialog) may be installed to fully use "Save" feature, but images can still be exported via "Dump"s.\
 UI may look slightly different, but main elements are present below.
 ![miv GUI](/assets/interface.png)

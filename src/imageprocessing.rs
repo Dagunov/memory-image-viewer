@@ -28,6 +28,14 @@ pub enum DataType {
     CV_64FC4,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[non_exhaustive]
+pub enum ChannelOrder {
+    #[default]
+    Rgb,
+    Bgr,
+}
+
 impl ValueEnum for DataType {
     fn value_variants<'a>() -> &'a [Self] {
         &[
@@ -85,7 +93,7 @@ impl From<DataType> for ColorType {
 }
 
 impl DataType {
-    fn channels(&self) -> u8 {
+    pub fn channels(&self) -> u8 {
         match self {
             DataType::CV_8UC1 | DataType::CV_16UC1 | DataType::CV_32FC1 | DataType::CV_64FC1 => 1,
             DataType::CV_8UC2 | DataType::CV_16UC2 | DataType::CV_32FC2 | DataType::CV_64FC2 => 2,
@@ -108,8 +116,8 @@ impl DataType {
     }
 
     /// Convert all images to u8 ones to be able to display them
-    fn convert_to_supported(&self, bytes: Vec<u8>) -> Vec<u8> {
-        match self {
+    fn convert_to_supported(&self, bytes: Vec<u8>, channel_order: ChannelOrder) -> Vec<u8> {
+        let type_converted = match self {
             DataType::CV_32FC1 | DataType::CV_32FC2 | DataType::CV_32FC3 | DataType::CV_32FC4 => {
                 bytes
                     .chunks(4)
@@ -146,13 +154,42 @@ impl DataType {
             }
             // supported ones
             DataType::CV_8UC1 | DataType::CV_8UC2 | DataType::CV_8UC3 | DataType::CV_8UC4 => bytes,
-        }
+        };
+        let order_converted = match self.channels() {
+            // no conversion required for rgb
+            _ if channel_order == ChannelOrder::Rgb => type_converted,
+            // three and for channelled data needs to be converted
+            4 if channel_order == ChannelOrder::Bgr => type_converted
+                .chunks(4)
+                .flat_map(|c| {
+                    assert!(c.len() == 4);
+                    [c[2], c[1], c[0], c[3]]
+                })
+                .collect(),
+            3 if channel_order == ChannelOrder::Bgr => type_converted
+                .chunks(3)
+                .flat_map(|c| {
+                    assert!(c.len() == 3);
+                    [c[2], c[1], c[0]]
+                })
+                .collect(),
+            // others have no such conversion
+            1 | 2 => type_converted,
+            _ => unreachable!(),
+        };
+        order_converted
     }
 
     /// Creates `ImageData` based on `DataType` with all required
     /// conversions.
-    pub fn init_image_data(&self, bytes: Vec<u8>, width: u32, height: u32) -> ImageData {
-        let bytes = self.convert_to_supported(bytes);
+    pub fn init_image_data(
+        &self,
+        bytes: Vec<u8>,
+        width: u32,
+        height: u32,
+        channel_order: ChannelOrder,
+    ) -> ImageData {
+        let bytes = self.convert_to_supported(bytes, channel_order);
         ImageData {
             data: bytes,
             color_type: (*self).into(),
