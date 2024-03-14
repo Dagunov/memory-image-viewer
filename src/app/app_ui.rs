@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use clap::ValueEnum;
 use eframe::{
     egui::{
@@ -106,9 +108,73 @@ impl Application {
         ComboBox::from_id_source("data_type_combobox")
             .selected_text(format!("{:?}", self.config.data_type))
             .show_ui(ui, |ui| {
-                for val in DataType::value_variants() {
-                    ui.selectable_value(&mut self.config.data_type, *val, format!("{:?}", val));
-                }
+                Grid::new("data_type_grid").show(ui, |ui| {
+                    ui.selectable_value(
+                        &mut self.config.data_type,
+                        DataType::CV_8UC1,
+                        format!("{:?}", DataType::CV_8UC1),
+                    );
+                    ui.selectable_value(
+                        &mut self.config.data_type,
+                        DataType::CV_16UC1,
+                        format!("{:?}", DataType::CV_16UC1),
+                    );
+                    ui.selectable_value(
+                        &mut self.config.data_type,
+                        DataType::CV_32FC1,
+                        format!("{:?}", DataType::CV_32FC1),
+                    );
+                    ui.selectable_value(
+                        &mut self.config.data_type,
+                        DataType::CV_64FC1,
+                        format!("{:?}", DataType::CV_64FC1),
+                    );
+                    ui.end_row();
+
+                    ui.selectable_value(
+                        &mut self.config.data_type,
+                        DataType::CV_8UC3,
+                        format!("{:?}", DataType::CV_8UC3),
+                    );
+                    ui.selectable_value(
+                        &mut self.config.data_type,
+                        DataType::CV_16UC3,
+                        format!("{:?}", DataType::CV_16UC3),
+                    );
+                    ui.selectable_value(
+                        &mut self.config.data_type,
+                        DataType::CV_32FC3,
+                        format!("{:?}", DataType::CV_32FC3),
+                    );
+                    ui.selectable_value(
+                        &mut self.config.data_type,
+                        DataType::CV_64FC3,
+                        format!("{:?}", DataType::CV_64FC3),
+                    );
+                    ui.end_row();
+
+                    ui.selectable_value(
+                        &mut self.config.data_type,
+                        DataType::CV_8UC4,
+                        format!("{:?}", DataType::CV_8UC4),
+                    );
+                    ui.selectable_value(
+                        &mut self.config.data_type,
+                        DataType::CV_16UC4,
+                        format!("{:?}", DataType::CV_16UC4),
+                    );
+                    ui.selectable_value(
+                        &mut self.config.data_type,
+                        DataType::CV_32FC4,
+                        format!("{:?}", DataType::CV_32FC4),
+                    );
+                    ui.selectable_value(
+                        &mut self.config.data_type,
+                        DataType::CV_64FC4,
+                        format!("{:?}", DataType::CV_64FC4),
+                    );
+                    ui.end_row();
+                });
             });
 
         // Channel order selection
@@ -138,7 +204,13 @@ impl Application {
         let longest_process_name_pid = {
             let mut pid_len = (sysinfo::Pid::from_u32(0), 0);
             for (pid, process) in self.sysinfo.system.processes() {
-                if process.name().len() > pid_len.1 {
+                if process.name().len() > pid_len.1
+                    && check_process_filter(
+                        &pid.to_string(),
+                        process.name(),
+                        &self.sysinfo.search_filter,
+                    )
+                {
                     pid_len.0 = *pid;
                     pid_len.1 = process.name().len();
                 }
@@ -179,6 +251,16 @@ impl Application {
             && (self.last_config.is_none()
                 || self.last_config.as_ref().is_some_and(|c| &self.config != c))
         {
+            self.sysinfo.refresh();
+            if self
+                .sysinfo
+                .system
+                .process(sysinfo::Pid::from_u32(self.config.pid))
+                .is_none()
+            {
+                self.config.pid = 0;
+                self.config.pid_label = "☰ Not selected!".into();
+            }
             match self.get_image(ui) {
                 Ok(_) => self.logger.borrow_mut().info("Image loaded!"),
                 Err(e) => {

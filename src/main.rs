@@ -6,7 +6,7 @@ use read_process_memory::{copy_address, Pid, ProcessHandle};
 mod app;
 mod imageprocessing;
 
-/// Tool which allows to save image from cv::Mat from memory
+/// Tool which allows to save image from process memory to disk
 #[derive(Parser)]
 #[command(about, version)]
 struct CLI {
