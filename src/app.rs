@@ -98,7 +98,7 @@ impl Application {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         cc.storage
             .and_then(|storage| eframe::get_value(storage, eframe::APP_KEY))
-            .unwrap_or(Default::default())
+            .unwrap_or_default()
     }
 }
 

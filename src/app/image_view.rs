@@ -124,12 +124,10 @@ impl ImageView {
                         {
                             if dump_folder.is_some() {
                                 self.dump_filename = Some(String::new());
-                            } else {
-                                if let Ok(path) =
-                                    file_dialog(FileDialogMode::SelectFolder, &self.logger)
-                                {
-                                    dump_folder.replace(path);
-                                }
+                            } else if let Ok(path) =
+                                file_dialog(FileDialogMode::SelectFolder, &self.logger)
+                            {
+                                dump_folder.replace(path);
                             }
                         }
                         if ui.button("Dump").clicked()
@@ -137,12 +135,10 @@ impl ImageView {
                         {
                             if dump_folder.is_some() {
                                 self.save_to(Self::gen_dump_path(dump_folder.clone().unwrap()));
-                            } else {
-                                if let Ok(path) =
-                                    file_dialog(FileDialogMode::SelectFolder, &self.logger)
-                                {
-                                    dump_folder.replace(path);
-                                }
+                            } else if let Ok(path) =
+                                file_dialog(FileDialogMode::SelectFolder, &self.logger)
+                            {
+                                dump_folder.replace(path);
                             }
                         }
                     });

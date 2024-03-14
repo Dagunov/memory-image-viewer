@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use clap::ValueEnum;
 use eframe::{
     egui::{
         text::{CCursor, CCursorRange},
@@ -321,20 +320,18 @@ impl Application {
                     let path = std::path::PathBuf::from(self.dump_folder_text_edit.clone());
                     if path.exists() {
                         self.dump_folder = Some(path);
-                    } else {
-                        if self.dump_folder.is_some() {
-                            if let Ok(string) = self
-                                .dump_folder
-                                .clone()
-                                .unwrap()
-                                .into_os_string()
-                                .into_string()
-                            {
-                                self.dump_folder_text_edit = string;
-                            }
-                        } else {
-                            self.dump_folder_text_edit.clear();
+                    } else if self.dump_folder.is_some() {
+                        if let Ok(string) = self
+                            .dump_folder
+                            .clone()
+                            .unwrap()
+                            .into_os_string()
+                            .into_string()
+                        {
+                            self.dump_folder_text_edit = string;
                         }
+                    } else {
+                        self.dump_folder_text_edit.clear();
                     }
                 }
             } else {
