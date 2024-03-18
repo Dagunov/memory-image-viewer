@@ -1,0 +1,22 @@
+[package]
+name = "memory-image-viewer"
+version = "0.3.0"
+edition = "2021"
+
+[[bin]]
+name = "miv"
+path = "src/main.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = "0.4.35"
+clap = { version = "4.5.1", features = ["derive"] }
+eframe = { version = "0.26.2", features = ["persistence"] }
+env_logger = "0.11.2"
+image = { version = "0.24.9", default-features = false, features = ["png"] }
+log = "0.4.21"
+native-dialog = "0.7.0"
+read-process-memory = "0.1.6"
+serde = { version = "1.0.197", features = ["derive"] }
+sysinfo = "0.30.6"
