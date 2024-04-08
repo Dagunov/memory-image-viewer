@@ -9,7 +9,7 @@ use super::{file_helper::*, logger::Logger};
 pub struct ImageView {
     image: ImageData,
     texture: TextureHandle,
-    scale: f32,
+    scale: Option<f32>,
     saving_thread: Option<std::thread::JoinHandle<(ImageProcessingResult, PathBuf)>>,
     logger: Rc<RefCell<Logger>>,
     /// for "Dump with name"
@@ -22,7 +22,7 @@ impl ImageView {
         Self {
             image,
             texture,
-            scale: 1f32,
+            scale: None,
             saving_thread: None,
             logger,
             dump_filename: None,
@@ -48,25 +48,27 @@ impl ImageView {
             };
         }
 
-        ui.horizontal(|ui| {
-            if self.saving_thread.is_some() {
-                ui.spinner();
-            }
+        if let Some(scale) = self.scale.as_mut() {
+            ui.input(|i| *scale *= i.zoom_delta());
+            ui.horizontal(|ui| {
+                if self.saving_thread.is_some() {
+                    ui.spinner();
+                }
 
-            if ui.button("⊟").clicked() {
-                self.scale *= 0.9f32;
-            }
-            if ui
-                .button(format!("{}%", (self.scale * 100f32) as usize))
-                .clicked()
-            {
-                self.scale = 1f32;
-            }
-            if ui.button("⊞").clicked() {
-                self.scale *= 1.1f32;
-                self.scale = self.scale.min(1f32);
-            }
-        });
+                if ui.button("⊟").clicked() {
+                    *scale *= 0.9f32;
+                }
+                if ui
+                    .button(format!("{}%", (*scale * 100f32) as usize))
+                    .clicked()
+                {
+                    *scale = 1f32;
+                }
+                if ui.button("⊞").clicked() {
+                    *scale *= 1.1f32;
+                }
+            });
+        }
 
         ui.horizontal(|ui| {
             if let Some(dump_filename) = &mut self.dump_filename {
@@ -146,10 +148,29 @@ impl ImageView {
             }
         });
 
-        ui.add(Image::from_texture(&self.texture).max_size(vec2(
-            self.image.width as f32 * self.scale,
-            self.image.height as f32 * self.scale,
-        )));
+        let screen_height = ui.ctx().screen_rect().height() - 100f32;
+        if self.scale.is_none() {
+            // ui.available_height() is nothing usefull due to immediate ui mode
+            // instead, ui.ctx().screen_rect().height() can be used
+            // (with a 100px downsize for bars, buttons etc.)
+            self.scale = Some(
+                (ui.available_width() / self.image.width as f32)
+                    .min(screen_height / self.image.height as f32),
+            );
+        }
+
+        if ui.available_width() < self.image.width as f32 * self.scale.unwrap()
+            || screen_height < self.image.height as f32 * self.scale.unwrap()
+        {
+            ui.set_min_height(screen_height);
+            ScrollArea::both().show(ui, |ui| {
+                ui.add(
+                    Image::from_texture(&self.texture).fit_to_original_size(self.scale.unwrap()),
+                );
+            });
+        } else {
+            ui.add(Image::from_texture(&self.texture).fit_to_original_size(self.scale.unwrap()));
+        }
     }
 
     fn save_to(&mut self, path: PathBuf) {

@@ -84,12 +84,28 @@ impl Application {
         }
 
         // Memory address input
-        ui.vertical(|ui| {
+        ui.horizontal(|ui| {
             if !self.config.address.is_empty() && parse_address(&self.config.address).is_err() {
                 ui.style_mut().visuals.override_text_color =
                     Some(ui.style().visuals.error_fg_color);
             }
             ui.add(TextEdit::singleline(&mut self.config.address).hint_text("Memory address"));
+            let reread_shortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::R);
+            let reread_shortcut_pressed = ui.input_mut(|i| i.consume_shortcut(&reread_shortcut));
+
+            if ui
+                .button("↺")
+                .on_hover_ui(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Re-read memory, usefull in case nothing but image data itself had changed.");
+                        ui.label(ui.ctx().format_shortcut(&reread_shortcut));
+                    });
+                })
+                .clicked()
+                || reread_shortcut_pressed
+            {
+                self.manual_reread = true;
+            }
         });
 
         // Image size input
@@ -248,8 +264,10 @@ impl Application {
     fn draw_image_block(&mut self, ui: &mut Ui) {
         if self.config.is_filled()
             && (self.last_config.is_none()
-                || self.last_config.as_ref().is_some_and(|c| &self.config != c))
+                || self.last_config.as_ref().is_some_and(|c| &self.config != c)
+                || self.manual_reread)
         {
+            self.manual_reread = false;
             self.sysinfo.refresh();
             if self
                 .sysinfo

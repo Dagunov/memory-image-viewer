@@ -23,7 +23,7 @@ impl Logger {
     pub fn warn(&mut self, msg: impl Into<String>) {
         let msg = msg.into();
         warn!("{}", msg);
-        self.msg = RichText::new(prepend_time(msg)).color(Color32::YELLOW);
+        self.msg = RichText::new(prepend_time(msg)).color(Color32::from_rgb(255, 140, 0));
     }
 
     pub fn error(&mut self, msg: impl Into<String>) {

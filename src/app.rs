@@ -80,6 +80,8 @@ pub struct Application {
     #[serde(skip)]
     last_config: Option<Config>,
     #[serde(skip)]
+    manual_reread: bool,
+    #[serde(skip)]
     sysinfo: SysInfo,
     #[serde(skip)]
     image_view: Option<image_view::ImageView>,
