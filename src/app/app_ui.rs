@@ -12,6 +12,8 @@ use crate::{get_bytes, imageprocessing::*, parse_address};
 
 use super::{check_process_filter, file_helper::*, image_view::ImageView, Application};
 
+pub mod postprocessing;
+
 #[derive(Debug)]
 enum GetImageError {
     AddressNotValid,
@@ -51,6 +53,10 @@ impl App for Application {
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
+    }
+
+    fn auto_save_interval(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(1)
     }
 }
 
@@ -212,6 +218,11 @@ impl Application {
                 });
             },
         );
+
+        // Postprocessing
+        if self.postprocessing_config.draw(ui) {
+            self.manual_reread = true;
+        }
     }
 
     fn draw_processes(&mut self, ui: &mut Ui) {
@@ -301,12 +312,18 @@ impl Application {
         if let Ok(address) = parse_address(&self.config.address) {
             match get_bytes(self.config.pid, address, length) {
                 Ok(bytes) => {
+                    self.postprocessing_config.run_init();
                     let image_data = self.config.data_type.init_image_data(
                         bytes,
                         self.config.width,
                         self.config.height,
                         self.config.channel_order,
+                        match self.postprocessing_config.enabled {
+                            true => Some(|d: &[u8], t| self.postprocessing_config.run(d, t)),
+                            false => None,
+                        },
                     );
+                    self.postprocessing_config.run_deinit();
                     self.image_view =
                         Some(ImageView::new(image_data, self.logger.clone(), ui.ctx()));
                     Ok(())

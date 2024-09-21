@@ -1,81 +1,22 @@
-use clap::Parser;
-use imageprocessing::*;
+#![windows_subsystem = "windows"]
+
 use log::{error, info};
 use read_process_memory::{copy_address, Pid, ProcessHandle};
 
 mod app;
 mod imageprocessing;
 
-/// Tool which allows to save image from process memory to disk
-#[derive(Parser)]
-#[command(about, version)]
-struct CLI {
-    /// PID of target process
-    pid: u32,
-
-    /// Target memory address in process
-    addr: String,
-
-    /// Width of image
-    width: u32,
-
-    /// Height of image
-    height: u32,
-
-    /// Buffer type
-    #[arg(value_enum)]
-    buf_type: DataType,
-
-    /// Out file name
-    #[arg(short, long, default_value_t = String::from("out"))]
-    out: String,
-
-    /// Use bgr channel order
-    #[arg(long)]
-    bgr: bool,
-}
-
 fn main() {
     env_logger::init();
-    if std::env::args().len() > 1 {
-        info!("Working in CLI mode");
-        let cli = CLI::parse();
-        process_cli(cli);
-    } else {
-        info!("Working in GUI mode");
-        let native_options = eframe::NativeOptions::default();
-        if let Err(e) = eframe::run_native(
-            "memory-image-viewer",
-            native_options,
-            Box::new(|cc| Box::new(app::Application::new(cc))),
-        ) {
-            error!("Eframe init failed: {:?}", e);
-        }
-    }
-}
-
-fn process_cli(cli: CLI) {
-    let buff_size =
-        cli.width as usize * cli.height as usize * cli.buf_type.bytes_per_pixel() as usize;
-    let addr = parse_address(&cli.addr).unwrap();
-    let channel_order = {
-        if cli.bgr {
-            ChannelOrder::Bgr
-        } else {
-            ChannelOrder::Rgb
-        }
-    };
-    match get_bytes(cli.pid, addr, buff_size) {
-        Ok(bytes) => {
-            let image_data =
-                cli.buf_type
-                    .init_image_data(bytes, cli.width, cli.height, channel_order);
-            match &image_data.save(&std::path::PathBuf::from(&(cli.out + ".png"))) {
-                Ok(_) => info!("Image saved!"),
-                Err(e) => error!("Could not save an image: {:?}", e),
-            }
-        }
-        Err(e) => error!("Bytes could not de loaded: {:?}", e),
+    info!("Working in GUI mode");
+    let native_options = eframe::NativeOptions::default();
+    let clear_mem = std::env::args().len() > 1;
+    if let Err(e) = eframe::run_native(
+        "memory-image-viewer",
+        native_options,
+        Box::new(move |cc| Box::new(app::Application::new(cc, clear_mem))),
+    ) {
+        error!("Eframe init failed: {:?}", e);
     }
 }
 

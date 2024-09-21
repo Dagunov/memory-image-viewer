@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use clap::{builder::PossibleValue, ValueEnum};
 use eframe::egui::ColorImage;
 use image::ColorType;
 use serde::{Deserialize, Serialize};
@@ -36,50 +35,6 @@ pub enum ChannelOrder {
     Bgr,
 }
 
-impl ValueEnum for DataType {
-    fn value_variants<'a>() -> &'a [Self] {
-        &[
-            Self::CV_8UC1,
-            // Self::CV_8UC2,
-            Self::CV_8UC3,
-            Self::CV_8UC4,
-            Self::CV_16UC1,
-            // Self::CV_16UC2,
-            Self::CV_16UC3,
-            Self::CV_16UC4,
-            Self::CV_32FC1,
-            // Self::CV_32FC2,
-            Self::CV_32FC3,
-            Self::CV_32FC4,
-            Self::CV_64FC1,
-            // Self::CV_64FC2,
-            Self::CV_64FC3,
-            Self::CV_64FC4,
-        ]
-    }
-
-    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
-        Some(match self {
-            DataType::CV_8UC1 => PossibleValue::new("CV_8UC1").alias("8UC1"),
-            DataType::CV_8UC2 => PossibleValue::new("CV_8UC2").alias("8UC2"),
-            DataType::CV_8UC3 => PossibleValue::new("CV_8UC3").alias("8UC3"),
-            DataType::CV_8UC4 => PossibleValue::new("CV_8UC4").alias("8UC4"),
-            DataType::CV_16UC1 => PossibleValue::new("CV_16UC1").alias("16UC1"),
-            DataType::CV_16UC2 => PossibleValue::new("CV_16UC2").alias("16UC2"),
-            DataType::CV_16UC3 => PossibleValue::new("CV_16UC3").alias("16UC3"),
-            DataType::CV_16UC4 => PossibleValue::new("CV_16UC4").alias("16UC4"),
-            DataType::CV_32FC1 => PossibleValue::new("CV_32FC1").alias("32FC1"),
-            DataType::CV_32FC2 => PossibleValue::new("CV_32FC2").alias("32FC2"),
-            DataType::CV_32FC3 => PossibleValue::new("CV_32FC3").alias("32FC3"),
-            DataType::CV_32FC4 => PossibleValue::new("CV_32FC4").alias("32FC4"),
-            DataType::CV_64FC1 => PossibleValue::new("CV_64FC1").alias("64FC1"),
-            DataType::CV_64FC2 => PossibleValue::new("CV_64FC2").alias("64FC2"),
-            DataType::CV_64FC3 => PossibleValue::new("CV_64FC3").alias("64FC3"),
-            DataType::CV_64FC4 => PossibleValue::new("CV_64FC4").alias("64FC4"),
-        })
-    }
-}
-
 impl From<DataType> for ColorType {
     fn from(value: DataType) -> Self {
         match value.channels() {
@@ -102,7 +57,7 @@ impl DataType {
         }
     }
 
-    fn bytes_per_color(&self) -> u8 {
+    pub fn bytes_per_color(&self) -> u8 {
         match self {
             DataType::CV_8UC1 | DataType::CV_8UC2 | DataType::CV_8UC3 | DataType::CV_8UC4 => 1,
             DataType::CV_16UC1 | DataType::CV_16UC2 | DataType::CV_16UC3 | DataType::CV_16UC4 => 2,
@@ -180,18 +135,54 @@ impl DataType {
         order_converted
     }
 
+    fn convert_to_supported_with_post<F: Fn(&[u8], DataType) -> Result<Vec<u8>, ()>>(
+        &self,
+        bytes: Vec<u8>,
+        channel_order: ChannelOrder,
+        post: F,
+    ) -> Vec<u8> {
+        match post(&bytes, *self) {
+            Err(_) => self.convert_to_supported(bytes, channel_order),
+            Ok(type_converted) => match self.channels() {
+                // no conversion required for rgb
+                _ if channel_order == ChannelOrder::Rgb => type_converted,
+                // three and for channelled data needs to be converted
+                4 if channel_order == ChannelOrder::Bgr => type_converted
+                    .chunks(4)
+                    .flat_map(|c| {
+                        assert!(c.len() == 4);
+                        [c[2], c[1], c[0], c[3]]
+                    })
+                    .collect(),
+                3 if channel_order == ChannelOrder::Bgr => type_converted
+                    .chunks(3)
+                    .flat_map(|c| {
+                        assert!(c.len() == 3);
+                        [c[2], c[1], c[0]]
+                    })
+                    .collect(),
+                // others have no such conversion
+                1 | 2 => type_converted,
+                _ => unreachable!(),
+            },
+        }
+    }
+
     /// Creates `ImageData` based on `DataType` with all required
     /// conversions.
-    pub fn init_image_data(
+    pub fn init_image_data<F: Fn(&[u8], DataType) -> Result<Vec<u8>, ()>>(
         &self,
         bytes: Vec<u8>,
         width: u32,
         height: u32,
         channel_order: ChannelOrder,
+        post: Option<F>,
     ) -> ImageData {
-        let bytes = self.convert_to_supported(bytes, channel_order);
         ImageData {
-            data: bytes,
+            data: match post {
+                Some(post) => self.convert_to_supported_with_post(bytes, channel_order, post),
+                None => self.convert_to_supported(bytes, channel_order),
+            },
             color_type: (*self).into(),
             width,
             height,

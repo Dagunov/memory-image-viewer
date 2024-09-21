@@ -94,10 +94,14 @@ pub struct Application {
     // skipped from saving as user may install implementation between startups
     #[serde(skip)]
     file_dialog_not_implemented: bool,
+    postprocessing_config: app_ui::postprocessing::PostprocessingConfig,
 }
 
 impl Application {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, clear_mem: bool) -> Self {
+        if clear_mem {
+            return Default::default();
+        }
         cc.storage
             .and_then(|storage| eframe::get_value(storage, eframe::APP_KEY))
             .unwrap_or_default()
